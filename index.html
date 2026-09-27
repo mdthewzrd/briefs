@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Research Brief: Character-swap AI-influencer pipelines</title>
+<style>
+body{max-width:760px;margin:0 auto;padding:48px 24px;background:#14110d;color:#e8e2d6;font:16px/1.65 -apple-system,'Segoe UI',Roboto,sans-serif;}
+h1{color:#f4b860;font-size:1.7em;border-bottom:2px solid #f4b86033;padding-bottom:10px;}
+h2{color:#f4b860;font-size:1.25em;margin-top:2em;}
+h3{color:#d9c9a8;font-size:1.05em;margin-top:1.5em;}
+a{color:#7fb8ff;}
+code{background:#241f18;padding:2px 6px;border-radius:4px;font-size:.9em;}
+pre{background:#1b1712;padding:16px;border-radius:8px;overflow-x:auto;border:1px solid #2e2820;}
+pre code{background:none;padding:0;}
+li{margin:4px 0;}
+strong{color:#fff;}
+details{background:#1b1712;border:1px solid #2e2820;border-radius:8px;padding:12px 16px;margin:16px 0;}
+summary{cursor:pointer;color:#f4b860;font-weight:600;}
+hr{border:none;border-top:1px solid #2e2820;margin:2em 0;}
+</style></head><body>
+<h1>Research Brief: Character-swap AI-influencer pipelines (Sept 2026 state of the art)</h1>
+<h2>Plain-English summary</h2>
+<ul>
+<li><strong>Goal</strong>: Learn what tools and workflows creators use to make reels like "Jean Philanthrope" — real filmed iPhone footage where only the on-screen character's face/identity is replaced — and how to build a frontier version and a cheap local version.</li>
+<li><strong>Done</strong>: The format is confirmed and buildable: film a real performer, then swap in a synthetic identity. The proven open-source recipe is <strong>FaceFusion + InSwapper</strong> (face graft) or <strong>Wan-Animate 14B</strong> (full character replacement with matching lighting), plus <strong>LatentSync/MuseTalk</strong> (mouth re-sync after dubbing) and <strong>F5-TTS/Chatterbox</strong> (voice clone). Detectors in 2026 are near-blind to this class of footage (best benchmark ~70 AUROC, humans 52.6%).</li>
+<li><strong>What it means</strong>: A high-quality version of this pipeline is achievable on a single consumer GPU (16–24GB for the top tier; 8–12GB for the swap-only tier), at near-zero software cost. Commercial SaaS (HeyGen, Sync.so) is easier but ~$5/min and locked to their avatar formats.</li>
+<li><strong>Next</strong>: Prototype the cheap tier (FaceFusion → LatentSync → grade) on one test clip; only move to Wan-Animate full replacement if face-swap-only artifacts (hairline, ears, profile) show.</li>
+</ul>
+<p>&lt;details&gt;&lt;summary&gt;Technical details (for engineers)&lt;/summary&gt;</p>
+<p>Sept-2026 SOTA for "filmed scene, swapped character": (1) per-frame identity transfer via InsightFace InSwapper-128 wrapped by FaceFusion (30k★) with restoration (GFPGAN/CodeFormer-class) and maskers; (2) whole-head/whole-body replacement via Wan2.2-Animate-14B in replacement mode with Relighting LoRA (arXiv 2509.14055), run locally in FP8/GGUF at 16–24GB VRAM or rented; (3) audio-conditioned latent-diffusion lip sync (ByteDance LatentSync) or real-time inpainting (MuseTalk); (4) zero-shot voice cloning (F5-TTS, MIT-licensed Chatterbox). Detection benchmarks (DF26) show face-swap-on-real-footage is currently the least-detectable synthetic-media class; the industry counter is C2PA capture-time provenance.</p>
+<p>&lt;/details&gt;</p>
+<h2>Landscape</h2>
+<ul>
+<li><strong>Face-swap / identity graft (OSS)</strong>: swap a synthetic face onto a filmed performer per-frame.</li>
+<li><strong>Character replacement (video diffusion)</strong>: regenerate the whole character (head/body) in the scene, keeping background and lighting.</li>
+<li><strong>Lip sync (OSS + SaaS)</strong>: re-animate mouths to match new/dubbed audio.</li>
+<li><strong>Voice cloning (OSS)</strong>: synthesize the character's voice from a short reference.</li>
+<li><strong>Commercial avatar SaaS</strong>: all-in-one hosted talking-head/swap services.</li>
+<li><strong>Detection &amp; provenance</strong>: platform detectors and C2PA signing — the risk surface.</li>
+</ul>
+<h2>Findings</h2>
+<h3>FaceFusion + InSwapper (the default OSS swap stack)</h3>
+<ul>
+<li><strong>What</strong>: Actively-maintained face manipulation platform (detection → InSwapper-128 swap → maskers → restoration). InSwapper-128 is "the de facto standard for open-source face swapping"; despite 128px internal resolution it's judged the most convincing/robust of the OSS swap models (vs SimSwap, Ghost, BlendSwap, UniFace). 8GB VRAM minimum, 12GB comfortable. Caveat: inswapper requires a commercial license from InsightFace for commercial use.</li>
+<li><strong>For whom</strong>: This is the cheap/local tier and what community consensus says the Jean-Phil-style creators actually run. Works on a 3060-class card.</li>
+<li><strong>Source</strong>: github.com/facefusion/facefusion (30.0k★, active); docs.facefusion.io/faq; insightface.ai; 1337sheets.com model comparison; r/generativeAI thread 1sr0t0q describing the exact workflow.</li>
+</ul>
+<h3>Wan2.2 / Wan-Animate 14B (frontier OSS character replacement)</h3>
+<ul>
+<li><strong>What</strong>: Open-weight video model with a <strong>replacement mode</strong>: takes a video + one character image, replicates body motion via skeleton signals, reenacts expressions from the reference, and uses a <strong>Relighting LoRA</strong> to keep the swapped character consistent with scene lighting/tone — SOTA per its paper. Runs locally via ComfyUI (Kijai's WanAnimatePreprocess nodes); FP8/GGUF quants fit 16–24GB, aggressive offload claims down to 6–8GB at low res/short clips; RunPod rental is the common escape hatch.</li>
+<li><strong>For whom</strong>: The frontier/quality tier — solves hairline/ears/profile problems face-swap-only leaves. Needs the beefiest GPU in the room or hourly rental.</li>
+<li><strong>Source</strong>: github.com/Wan-Video/Wan2.2; arxiv.org/html/2509.14055; humanaigc.github.io/wan-animate; github.com/kijai/ComfyUI-WanAnimatePreprocess; r/comfyui 1of9ixx + 1nr3vzm; willitrunai.com + localaimaster.com VRAM guides.</li>
+</ul>
+<h3>Lip sync: LatentSync, MuseTalk, Wav2Lip</h3>
+<ul>
+<li><strong>What</strong>: ByteDance <strong>LatentSync</strong> = end-to-end audio-conditioned latent-diffusion lip sync, no intermediate landmarks — the quality SOTA; hosted free-tier on Fal/Sieve/Replicate. <strong>MuseTalk</strong> (Tencent/Lyra) = real-time single-step inpainting, faster, slightly weaker. Wav2Lip is legacy ("don't build on it in 2026").</li>
+<li><strong>For whom</strong>: LatentSync when mouths matter (dialogue reels); MuseTalk when speed/volume matters.</li>
+<li><strong>Source</strong>: github.com/bytedance/LatentSync; sync.so blog; lipsync.com 2026 comparisons.</li>
+</ul>
+<h3>Voice cloning: F5-TTS, Chatterbox, XTTS v2</h3>
+<ul>
+<li><strong>What</strong>: Zero-shot cloning from 5–15s reference. F5-TTS = raw quality leader (non-commercial license); <strong>Chatterbox</strong> (Resemble, MIT, 0.5B, 4GB VRAM) = the one you can ship; blind study 65.3% preferred it over ElevenLabs. Local clones fool 70–85% of casual listeners on 12GB cards.</li>
+<li><strong>For whom</strong>: All tiers — this stage is cheap everywhere.</li>
+<li><strong>Source</strong>: uberduck.ai F5-TTS post; localaimaster.com 2026 model tests; rarebuildsoftware.com.</li>
+</ul>
+<h3>Commercial SaaS</h3>
+<ul>
+<li><strong>HeyGen</strong>: Avatar IV/V 20 credits/min (~$5/min digital-twin tier), $100/mo API minimum, custom Digital Twin from 2 min of footage — good for corporate talking heads, not for full-scene character acting.</li>
+<li><strong>Sync.so</strong>: judged lipsync quality leader; free API tier, paid from $5/mo — the pragmatic paid lipsync option.</li>
+<li><strong>Runway Act-Two</strong>: performance capture (drive a character image with your filmed performance), 5 credits/sec — an alternative "perform-then-transfer" path rather than a swap.</li>
+<li><strong>Akool / DeepSwap / Magic Hour</strong>: hosted swap, ~$4–30/mo — convenience tier, weaker control.</li>
+<li><strong>Source</strong>: heygen.com/pricing + eesel/pexo/vidmetoo 2026 pricing breakdowns; lipsync.com pricing; runway help docs; facefusion.co / fast.io tool guides.</li>
+</ul>
+<h3>Detection &amp; provenance (risk surface)</h3>
+<ul>
+<li><strong>What</strong>: DF26 benchmark: nine detectors near chance, best 69.7 AUROC, humans 52.6%; detection accuracy fell up to 49% in a year. Detectors degrade further under compression/enhancement (arXiv 2607.13234). Hive APIs scan uploads at platform scale. Industry pivot: C2PA capture-time signing rather than pixel detection.</li>
+<li><strong>Meaning</strong>: real-footage + swap + re-encode + grade is currently the least-detectable synthetic class — which is exactly why the Jean-Phil format chose it. Provenance metadata (phone C2PA, stripped by processing) is the main future tripwire; Instagram AI-content labels are a policy exposure regardless of detectability.</li>
+<li><strong>Source</strong>: truescreen.io DF26 article; arxiv 2607.13234 + 2508.06248; eyesift.com; valtikstudios.com.</li>
+</ul>
+<h2>Frontier-grade pipeline blueprint (to clone the process)</h2>
+<ol>
+<li><strong>Identity asset</strong>: design character → generate strong frontal reference (any image gen / Nano Banana-class) → train identity LoRA or embed via InstantID-style for consistency.</li>
+<li><strong>Performance</strong>: film performer on iPhone in real locations (the "real scene" is the quality and stealth foundation).</li>
+<li><strong>Swap</strong>: FaceFusion/InSwapper per-frame with maskers + restoration — or Wan-Animate replacement mode with Relighting LoRA for whole-character shots.</li>
+<li><strong>Audio</strong>: script → F5-TTS/Chatterbox voice → LatentSync/MuseTalk to re-sync mouths.</li>
+<li><strong>Finish</strong>: ffmpeg grade/stabilize/re-encode (Postica's existing yt-dlp/ffmpeg infra covers ingest and encode), 9:16 delivery.</li>
+</ol>
+<p>Cheap-tier = same pipeline with FaceFusion (8–12GB) + MuseTalk + Chatterbox + hosted-free LatentSync; only the Wan-Animate stage demands 16–24GB or rental.</p>
+<h2>Surprises</h2>
+<ul>
+<li>Detection is collapsing faster than generation quality is being policed — best 2026 detector is barely better than coin-flip (69.7 AUROC), so "detection risk" today is procedural (platform labels, provenance law) more than technical.</li>
+<li>InSwapper-128, a 128px model, still beats newer/nicer architectures — restoration + masking pipeline matters more than raw swap model resolution.</li>
+<li>Wan-Animate's Relighting LoRA (scene-consistent relighting of the swapped character) is the single biggest 2026 quality jump for this exact format.</li>
+<li>The Jean-Phil virality triggered meme-coin pump accusations (Dexerto/KYM) — reputational/vector risk is part of this format's territory.</li>
+</ul>
+<h2>Gaps / Open Questions</h2>
+<ul>
+<li>Jean Philanthrope's <strong>actual</strong> stack is unconfirmed — only community inference ("looks like FaceFusion on real footage"); creator has not disclosed.</li>
+<li>The two example reels (lowcountry_d912, DdrPgHOND4e) weren't frame-inspected; the "filmed scene + swap" characterization rests on trend coverage. Follow-up: vision-pass the reels.</li>
+<li>FaceFusion's built-in lipsync module vs dedicated LatentSync: comparisons are mixed; needs an A/B on real footage.</li>
+<li>Per-minute rendered cost of a local Wan-Animate run on a 4090-class card (minutes of GPU per output minute) — no reliable published number found.</li>
+<li>Legal surface for commercial use: inswapper's non-commercial/commercial-license terms vs FaceFusion's MIT shell — needs a license read before any monetized deployment.</li>
+</ul>
+<h2>Recommendation</h2>
+<p>Build the cheap tier first and buy up only where artifacts force it: <strong>FaceFusion (InSwapper + CodeFormer-class restoration) → Chatterbox voice → LatentSync (hosted free tier) → ffmpeg grade</strong>, on one 30–60s test clip using an original character (not a real person's identity). It runs on an 8–12GB card at ~zero cost and matches the format community consensus attributes to these creators. If hairline/ears/profile swaps look fake, escalate that shot to <strong>Wan-Animate replacement mode</strong> (16–24GB local or RunPod rental). Keep Sync.so ($5/mo) as the lipsync fallback. All original synthetic personas only — impersonation of real people is where this tech's legal/detection exposure actually lives.</p>
+<h2>Sources</h2>
+<ul>
+<li>github.com/facefusion/facefusion · docs.facefusion.io/faq · docs.facefusion.io/knowledgebase/gpu-capabilities</li>
+<li>github.com/deepinsight/insightface · insightface.ai · insightface.ai/blog/march-2026-face-swapping-papers (GSwap)</li>
+<li>github.com/haofanwang/inswapper · 1337sheets.com (InSwapper vs SimSwap vs Ghost vs BlendSwap vs UniFace)</li>
+<li>github.com/bytedance/LatentSync · lucataco/cog-LatentSync · sync.so blog (OSS lipsync roundup) · lipsync.com comparisons/pricing</li>
+<li>MuseTalk (Lyra/Tencent) via sync.so + lipsync.com</li>
+<li>github.com/Wan-Video/Wan2.2 · arxiv.org/html/2509.14055 (Wan-Animate paper) · humanaigc.github.io/wan-animate · github.com/kijai/ComfyUI-WanAnimatePreprocess · willitrunai.com + localaimaster.com (Wan VRAM guides) · spheron.network GPU guide</li>
+<li>r/generativeAI/comments/1sr0t0q · r/StableDiffusion 1ks2yiw, 1jqpu6v, 1i9mwaj, 1q2kgpe · r/comfyui 1of9ixx, 1nr3vzm, 1pjza6a</li>
+<li>knowyourmeme.com (Jean Philanthrope) · dexerto.com Jean Phil article · Yahoo News explainer</li>
+<li>heygen.com/pricing + eesel.ai, pexo.ai, vidmetoo.com, arcade.software pricing analyses · runwayml.com Act-Two help doc + eesel/somake Runway pricing · crazyrouter.com lipsync API comparison</li>
+<li>uberduck.ai (F5-TTS) · localaimaster.com TTS/clone tests · rarebuildsoftware.com voice cloning 2026</li>
+<li>truescreen.io (DF26) · arxiv 2607.13234 · arxiv 2508.06248 · eyesift.com (Hive) · valtikstudios.com detection guide</li>
+<li>facefusion.co, fast.io, framia.converge.ai, zencreator.pro, sozee.ai (2026 face-swap tool guides)</li>
+</ul>
+
+</body></html>
